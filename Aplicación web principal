@@ -1,0 +1,231 @@
+from flask import Flask
+import psycopg2
+
+app = Flask(__name__)
+
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'postgres',
+    'password': '9119',
+    'database': 'Practica',
+    'port': '5432'
+}
+
+@app.route('/')
+def inicio():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        
+        # Totales
+        cur.execute("SELECT COUNT(*) FROM personas")
+        total_p = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM eventos")
+        total_e = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM encuentros")
+        total_en = cur.fetchone()[0]
+        
+        # Últimas personas
+        cur.execute("SELECT id_persona, nombre, apellido_paterno, carnet_identidad FROM personas LIMIT 10")
+        personas = cur.fetchall()
+        
+        # Últimos eventos
+        cur.execute("SELECT id_evento, nombre_evento, tipo_evento, fecha_evento FROM eventos LIMIT 10")
+        eventos = cur.fetchall()
+        
+        # Últimos encuentros
+        cur.execute("""
+            SELECT e.id_encuentro, p.nombre, ev.nombre_evento, e.fecha_encuentro 
+            FROM encuentros e
+            JOIN personas p ON e.id_persona = p.id_persona
+            JOIN eventos ev ON e.id_evento = ev.id_evento
+            LIMIT 10
+        """)
+        encuentros = cur.fetchall()
+        
+        cur.close()
+        conn.close()
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Gestión de Eventos</title>
+            <style>
+                body {{ font-family: Arial; margin: 20px; background: #f0f2f5; }}
+                h1 {{ color: #1a73e8; text-align: center; }}
+                .stats {{ display: flex; gap: 20px; justify-content: center; margin: 20px 0; }}
+                .card {{ background: white; padding: 20px; border-radius: 10px; text-align: center; width: 200px; box-shadow: 2px 2px 5px #ccc; }}
+                .card h2 {{ font-size: 2em; margin: 0; color: #1a73e8; }}
+                table {{ width: 100%; background: white; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background: #1a73e8; color: white; }}
+                .nav {{ text-align: center; margin: 20px 0; }}
+                .nav a {{ margin: 0 15px; color: #1a73e8; text-decoration: none; }}
+                footer {{ text-align: center; margin-top: 30px; color: #666; }}
+            </style>
+        </head>
+        <body>
+            <h1>Sistema de Gestión de Eventos</h1>
+            
+            <div class="nav">
+                <a href="/">Inicio</a>
+                <a href="/personas">Ver Personas</a>
+                <a href="/eventos">Ver Eventos</a>
+                <a href="/encuentros">Ver Encuentros</a>
+            </div>
+            
+            <div class="stats">
+                <div class="card"><h2>{total_p}</h2><p>Personas</p></div>
+                <div class="card"><h2>{total_e}</h2><p>Eventos</p></div>
+                <div class="card"><h2>{total_en}</h2><p>Encuentros</p></div>
+            </div>
+            
+            <h2>Últimas Personas</h2>
+            <table><tr><th>ID</th><th>Nombre</th><th>Apellido</th><th>Carnet</th></tr>
+        """
+        for p in personas:
+            html += f"<tr><td>{p[0]}</td><td>{p[1]}</td><td>{p[2]}</td><td>{p[3]}</td></tr>"
+        
+        html += """
+            </table>
+            <h2>Últimos Eventos</h2>
+            <table><tr><th>ID</th><th>Evento</th><th>Tipo</th><th>Fecha</th></tr>
+        """
+        for e in eventos:
+            html += f"<tr><td>{e[0]}</td><td>{e[1]}</td><td>{e[2]}</td><td>{e[3]}</td></tr>"
+        
+        html += """
+            </table>
+            <h2>Últimos Encuentros</h2>
+            <table><tr><th>ID</th><th>Persona</th><th>Evento</th><th>Fecha</th></tr>
+        """
+        for en in encuentros:
+            html += f"<tr><td>{en[0]}</td><td>{en[1]}</td><td>{en[2]}</td><td>{en[3]}</td></tr>"
+        
+        html += """
+            </table>
+            <footer>Datos generados con IA | PostgreSQL | Python + Flask</footer>
+        </body>
+        </html>
+        """
+        return html
+        
+    except Exception as e:
+        return f"<h1>Error</h1><p>{e}</p><p>Verifica PostgreSQL: password=9119, database=Practica</p>"
+
+@app.route('/personas')
+def ver_personas():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        cur.execute("SELECT id_persona, carnet_identidad, nombre, apellido_paterno, telefono, email FROM personas ORDER BY id_persona")
+        datos = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>Todas las Personas</title>
+        <style>
+            body { font-family: Arial; margin: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #1a73e8; color: white; }
+            .btn { display: inline-block; margin: 20px 0; padding: 10px 20px; background: #1a73e8; color: white; text-decoration: none; border-radius: 5px; }
+        </style>
+        </head>
+        <body>
+            <h1>Todas las Personas</h1>
+            <a href="/" class="btn">Volver al Inicio</a>
+            <table><tr><th>ID</th><th>Carnet</th><th>Nombre</th><th>Apellido</th><th>Teléfono</th><th>Email</th></tr>
+        """
+        for row in datos:
+            html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td><td>{row[5]}</td></tr>"
+        
+        html += "</table></body></html>"
+        return html
+    except Exception as e:
+        return f"<h1>Error</h1><p>{e}</p>"
+
+@app.route('/eventos')
+def ver_eventos():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        cur.execute("SELECT id_evento, nombre_evento, tipo_evento, fecha_evento, lugar FROM eventos ORDER BY id_evento")
+        datos = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>Todos los Eventos</title>
+        <style>
+            body { font-family: Arial; margin: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #1a73e8; color: white; }
+            .btn { display: inline-block; margin: 20px 0; padding: 10px 20px; background: #1a73e8; color: white; text-decoration: none; border-radius: 5px; }
+        </style>
+        </head>
+        <body>
+            <h1>Todos los Eventos</h1>
+            <a href="/" class="btn">Volver al Inicio</a>
+            <table><tr><th>ID</th><th>Evento</th><th>Tipo</th><th>Fecha</th><th>Lugar</th></tr>
+        """
+        for row in datos:
+            html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td></tr>"
+        
+        html += "</table></body></html>"
+        return html
+    except Exception as e:
+        return f"<h1>Error</h1><p>{e}</p>"
+
+@app.route('/encuentros')
+def ver_encuentros():
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT e.id_encuentro, p.nombre || ' ' || p.apellido_paterno, ev.nombre_evento, e.fecha_encuentro, e.tipo_participacion
+            FROM encuentros e
+            JOIN personas p ON e.id_persona = p.id_persona
+            JOIN eventos ev ON e.id_evento = ev.id_evento
+            ORDER BY e.id_encuentro
+        """)
+        datos = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        html = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>Todos los Encuentros</title>
+        <style>
+            body { font-family: Arial; margin: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background: #1a73e8; color: white; }
+            .btn { display: inline-block; margin: 20px 0; padding: 10px 20px; background: #1a73e8; color: white; text-decoration: none; border-radius: 5px; }
+        </style>
+        </head>
+        <body>
+            <h1>Todos los Encuentros</h1>
+            <a href="/" class="btn">Volver al Inicio</a>
+            <table><tr><th>ID</th><th>Persona</th><th>Evento</th><th>Fecha</th><th>Tipo</th></tr>
+        """
+        for row in datos:
+            html += f"<tr><td>{row[0]}</td><td>{row[1]}</td><td>{row[2]}</td><td>{row[3]}</td><td>{row[4]}</td></tr>"
+        
+        html += "</table></body></html>"
+        return html
+    except Exception as e:
+        return f"<h1>Error</h1><p>{e}</p>"
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
