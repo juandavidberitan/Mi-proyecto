@@ -1,0 +1,139 @@
+import csv
+import random
+import psycopg2
+
+print("="*60)
+print("🚀 GENERANDO E INSERTANDO DATOS COMPLETOS")
+print("="*60)
+
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'postgres',
+    'password': '9119',
+    'database': 'Practica',
+    'port': '5432'
+}
+
+# ========== 1. GENERAR 100 PERSONAS ==========
+print("\n📊 1. Generando 100 personas...")
+personas = []
+for i in range(1, 101):
+    personas.append({
+        'carnet_identidad': f"{10000000 + i}-{chr(65 + (i % 26))}",
+        'nombre': f'Nombre{i}',
+        'apellido_paterno': f'ApellidoP{i}',
+        'apellido_materno': f'ApellidoM{i}',
+        'fecha_nacimiento': f'{1980 + (i % 20)}-{(i % 12)+1:02d}-{(i % 28)+1:02d}',
+        'genero': 'M' if i % 2 == 0 else 'F',
+        'direccion': f'Calle {i}, Ciudad',
+        'telefono': f'555-{1000+i:04d}',
+        'email': f'persona{i}@email.com',
+        'fecha_registro': '2025-03-25 10:00:00'
+    })
+
+# ========== 2. GENERAR 20 EVENTOS ==========
+print("📊 2. Generando 20 eventos...")
+tipos = ['Conferencia', 'Taller', 'Seminario', 'Reunión', 'Capacitación']
+lugares = ['Centro de Convenciones', 'Universidad Nacional', 'Auditorio Empresarial', 'Hotel Plaza', 'Sala Virtual']
+eventos = []
+for i in range(1, 21):
+    eventos.append({
+        'nombre_evento': f'Evento {i} 2025',
+        'tipo_evento': tipos[i % len(tipos)],
+        'fecha_evento': f'2025-{i%12+1:02d}-{i%28+1:02d}',
+        'lugar': lugares[i % len(lugares)],
+        'descripcion': f'Descripción del evento {i}',
+        'capacidad_maxima': 50 + (i * 10),
+        'fecha_creacion': '2025-03-25 09:00:00'
+    })
+
+# ========== 3. GENERAR 200 ENCUENTROS ==========
+print("📊 3. Generando 200 encuentros...")
+tipos_encuentro = ['Asistente', 'Ponente', 'Organizador', 'Invitado', 'Staff']
+encuentros = []
+for i in range(1, 201):
+    persona = random.choice(personas)
+    evento = random.choice(eventos)
+    encuentros.append({
+        'carnet_identidad': persona['carnet_identidad'],
+        'nombre_evento': evento['nombre_evento'],
+        'fecha_encuentro': f'2025-{(i%12)+1:02d}-{(i%28)+1:02d} 10:00:00',
+        'tipo_participacion': random.choice(tipos_encuentro),
+        'observaciones': ''
+    })
+
+# ========== 4. INSERTAR EN POSTGRESQL ==========
+print("\n🗄️ 4. Insertando en PostgreSQL...")
+try:
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    print("✅ Conectado a PostgreSQL\n")
+
+    cursor.execute("TRUNCATE TABLE encuentros, eventos, personas RESTART IDENTITY CASCADE;")
+    print("🧹 Tablas limpiadas\n")
+
+    # Insertar personas
+    print("📥 Insertando personas...")
+    for p in personas:
+        cursor.execute("""
+            INSERT INTO personas VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            p['carnet_identidad'], p['nombre'], p['apellido_paterno'],
+            p['apellido_materno'], p['fecha_nacimiento'], p['genero'],
+            p['direccion'], p['telefono'], p['email'], p['fecha_registro']
+        ))
+    print(f"   ✅ {len(personas)} personas insertadas\n")
+
+    # Insertar eventos
+    print("📥 Insertando eventos...")
+    for e in eventos:
+        cursor.execute("""
+            INSERT INTO eventos VALUES (DEFAULT, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            e['nombre_evento'], e['tipo_evento'], e['fecha_evento'],
+            e['lugar'], e['descripcion'], e['capacidad_maxima'], e['fecha_creacion']
+        ))
+    print(f"   ✅ {len(eventos)} eventos insertados\n")
+
+    # Insertar encuentros
+    print("📥 Insertando encuentros...")
+    cursor.execute("SELECT id_persona, carnet_identidad FROM personas")
+    mapa_carnets = {carnet: id for id, carnet in cursor.fetchall()}
+    cursor.execute("SELECT id_evento, nombre_evento FROM eventos")
+    mapa_eventos = {nombre: id for id, nombre in cursor.fetchall()}
+
+    for enc in encuentros:
+        id_persona = mapa_carnets.get(enc['carnet_identidad'])
+        id_evento = mapa_eventos.get(enc['nombre_evento'])
+        if id_persona and id_evento:
+            cursor.execute("""
+                INSERT INTO encuentros VALUES (DEFAULT, %s, %s, %s, %s, %s)
+            """, (
+                id_persona, id_evento, enc['fecha_encuentro'],
+                enc['tipo_participacion'], enc['observaciones']
+            ))
+    print(f"   ✅ {len(encuentros)} encuentros insertados")
+
+    conn.commit()
+    print("\n💾 Cambios guardados")
+
+    # Verificar
+    print("\n📊 VERIFICACIÓN:")
+    cursor.execute("SELECT COUNT(*) FROM personas")
+    print(f"   Personas: {cursor.fetchone()[0]}")
+    cursor.execute("SELECT COUNT(*) FROM eventos")
+    print(f"   Eventos: {cursor.fetchone()[0]}")
+    cursor.execute("SELECT COUNT(*) FROM encuentros")
+    print(f"   Encuentros: {cursor.fetchone()[0]}")
+
+    cursor.close()
+    conn.close()
+    print("\n🔌 Conexión cerrada")
+
+except Exception as e:
+    print(f"\n❌ ERROR: {e}")
+
+print("\n" + "="*60)
+print("✅ PROCESO COMPLETADO")
+print("="*60)
+input("\nPresiona Enter para salir...")
